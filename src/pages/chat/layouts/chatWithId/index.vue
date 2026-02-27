@@ -161,6 +161,8 @@ function chooseWorkflowItem(item: any) {
   };
 
   workFlowRunner.value.inputs = [inputsObj];
+  isResume.value = false
+  reSumeRunner.value = {}
 
   console.log("workFlowRunner", workFlowRunner.value);
 }
@@ -515,14 +517,18 @@ async function startSSE(chatContent: string) {
         // 判断是否是最后一块数据
         handleNodeChunk({}, true);
       }
-      if (
-        typeof rawData === "string" &&
-        rawData.includes("NODE_WAIT_FEEDBACK_BY") &&
-        rawData.includes("data:")
-      ) {
-        // 判断是否是最后一块数据
-        handleNodeChunk({}, true);
+      if (typeof rawData === "string" && rawData.includes("ERROR") && rawData.includes("data:")) {
+        isResume.value = false;
+        reSumeRunner.value = {};
       }
+      // if (
+      //   typeof rawData === "string" &&
+      //   rawData.includes("NODE_WAIT_FEEDBACK_BY") &&
+      //   rawData.includes("data:")
+      // ) {
+      //   // 判断是否是最后一块数据
+      //   handleNodeChunk({}, true);
+      // }
 
       if (typeof rawData === "string" && rawData.includes("START") && rawData.includes("data:")) {
         isResume.value = true;
@@ -568,6 +574,15 @@ async function startSSE(chatContent: string) {
 
           // 调用 handleNodeChunk
           handleNodeChunk(showData, isLastChunk);
+        }
+
+        if (typeof rawData === "string" && rawData.includes("ERROR") && rawData.includes("data:")) {
+          // 提取 data 字段的内容
+          const dataMatch = rawData.match(/data:([\s\S]*?)(?=\nevent:|$)/);
+          let data = dataMatch?.[1]?.trim();
+          if (data && data.length > 0 && data !== "data:") {
+            handleDataChunk({ data });
+          }
         }
       } else {
         if (

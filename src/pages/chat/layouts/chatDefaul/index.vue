@@ -209,10 +209,14 @@ watch(
   },
 );
 
+function loadWorkflowData() {
+  isWorkflowVisible.value = !isWorkflowVisible.value;
+  loadWorkflowList();
+}
+
 // 组件挂载时加载知识库列表
-onMounted(async () => {
+onMounted(() => {
   loadKnowledgeList();
-  await loadWorkflowList();
 });
 </script>
 
@@ -372,7 +376,7 @@ onMounted(async () => {
                 <div
                   class="feature-btn"
                   :class="{ active: isWorkflowVisible }"
-                  @click="isWorkflowVisible = !isWorkflowVisible"
+                  @click="loadWorkflowData"
                 >
                   <el-icon class="feature-icon">
                     <SetUp />
