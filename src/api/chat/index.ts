@@ -1,4 +1,4 @@
-import type { ChatMessageVo, GetChatListParams, SendDTO } from './types';
+import type { ChatMessageVo, GetChatListParams, SendDTO, workflowVo } from './types';
 import { get, post } from '@/utils/request';
 
 // 发送消息
@@ -17,4 +17,14 @@ export function getChatList(params: GetChatListParams) {
 // 获取知识库列表
 export function getKnowledgeList() {
   return get('/system/info/list').json();
+}
+
+// 获取工作流列表
+export function getWorkflowList(params: workflowVo) {
+  // 将参数转换为查询字符串
+  const queryString = new URLSearchParams(params as Record<string, string>).toString();
+  // 拼接 URL
+  const url = `/admin/workflow/search?${queryString}`;
+  // 发送 POST 请求
+  return post<workflowVo[]>(url, {}).json();
 }

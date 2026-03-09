@@ -228,3 +228,9 @@ export interface ChatMessageVo {
    */
   userId?: number;
 }
+
+export interface workflowVo {
+  currentPage?: number;
+
+  pageSize?: number;
+}

@@ -1,16 +1,16 @@
 <!-- 默认消息列表页 -->
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue';
 import type { FilesCardProps } from 'vue-element-plus-x/types/FilesCard';
+import { nextTick, onMounted, ref, watch } from 'vue';
 import { Sender } from 'vue-element-plus-x';
+import { getKnowledgeList, getWorkflowList } from '@/api/chat';
 import FilesSelect from '@/components/FilesSelect/index.vue';
 import ModelSelect from '@/components/ModelSelect/index.vue';
 import WelecomeText from '@/components/WelecomeText/index.vue';
 import { useUserStore } from '@/stores';
+import { useChatStore } from '@/stores/modules/chat';
 import { useFilesStore } from '@/stores/modules/files';
 import { useSessionStore } from '@/stores/modules/session';
-import { useChatStore } from '@/stores/modules/chat';
-import { getKnowledgeList } from '@/api/chat';
 
 const userStore = useUserStore();
 const sessionStore = useSessionStore();
@@ -26,15 +26,108 @@ const isWebSearchEnabled = ref(false);
 
 // 知识库列表配置
 const knowledgeList = ref<any[]>([]);
+const workflowList = ref<any[]>([]);
 
 // 知识库列表选择标签配置
 const selectTagsArr = ref<any[]>([
   {
     dialogTitle: '知识库选择',
     key: 'knowledge',
-    options: knowledgeList.value
-  }
+    options: knowledgeList.value,
+  },
 ]);
+
+const workflowParams = ref<AnyObject>({
+  pageSize: 10,
+  currentPage: 1,
+});
+
+// 是否正在加载
+const isWorkflowLoading = ref(false);
+// 是否还有更多数据
+const hasMoreWorkflows = ref(true);
+
+// 工作流相关状态
+const isWorkflowVisible = ref(false);
+const selectedWorkflowName = ref<string>('工作流');
+const workFlowRunner = ref<AnyObject>({});
+
+function chooseWorkflowItem(item: any) {
+  isWorkflowVisible.value = true;
+  selectedWorkflowName.value = item.title;
+  workFlowRunner.value.uuid = item.uuid;
+  const nodes = [...item.nodes];
+  const user_inputs = nodes[0].inputConfig.user_inputs[0];
+  const inputsObj = {
+    uuid: nodes[0].uuid,
+    name: user_inputs.name,
+    required: user_inputs.required,
+    content: {
+      title: user_inputs.title,
+      value: '',
+      type: user_inputs.type,
+    },
+  };
+
+  workFlowRunner.value.inputs = [inputsObj];
+
+  console.log('workFlowRunner', workFlowRunner.value);
+}
+
+// 监听滚动事件
+function handleScroll(event: Event) {
+  const target = event.target as HTMLElement;
+  const { scrollTop, scrollHeight, clientHeight } = target;
+
+  // 判断是否滚动到底部
+  if (
+    scrollTop + clientHeight >= scrollHeight - 10
+    && !isWorkflowLoading.value
+    && hasMoreWorkflows.value
+  ) {
+    loadWorkflowList(true); // 加载更多
+  }
+}
+
+// 加载工作流列表
+async function loadWorkflowList(isLoadMore = false) {
+  if (isWorkflowLoading.value || !hasMoreWorkflows.value)
+    return; // 防止重复请求或无数据时继续加载
+  isWorkflowLoading.value = true;
+  try {
+    const response = await getWorkflowList(workflowParams.value);
+    console.log('工作流列表:', response);
+    if (response?.data && response.data?.records && Array.isArray(response.data.records)) {
+      const newRecords = response.data.records;
+
+      if (isLoadMore) {
+        // 追加数据
+        workflowList.value = [...workflowList.value, ...newRecords];
+      }
+      else {
+        // 替换数据（首次加载）
+        workflowList.value = newRecords;
+      }
+
+      // 更新分页参数
+      workflowParams.value.currentPage += 1;
+
+      // 判断是否还有更多数据
+      hasMoreWorkflows.value = response.data.total > workflowList.value.length;
+    }
+    else {
+      // 如果返回数据为空或格式不正确，标记为无更多数据
+      hasMoreWorkflows.value = false;
+    }
+  }
+  catch (error) {
+    console.error('Failed to load workflow list:', error);
+    hasMoreWorkflows.value = false; // 出错时也停止加载
+  }
+  finally {
+    isWorkflowLoading.value = false;
+  }
+}
 
 // 加载知识库列表
 async function loadKnowledgeList() {
@@ -44,11 +137,12 @@ async function loadKnowledgeList() {
       knowledgeList.value = response.rows.map((item: any) => ({
         id: item.id,
         name: item.name,
-        icon: 'Document'
+        icon: 'Document',
       }));
       selectTagsArr.value[0].options = knowledgeList.value;
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to load knowledge list:', error);
   }
 }
@@ -89,6 +183,10 @@ async function handleSend() {
   localStorage.setItem('chatContent', messageContent);
   localStorage.setItem('enableThinking', String(isReasoningEnabled.value));
   localStorage.setItem('enableInternet', String(isWebSearchEnabled.value));
+  localStorage.setItem('isWorkflowVisible', String(isWorkflowVisible.value));
+  localStorage.setItem('selectedWorkflowName', selectedWorkflowName.value);
+  localStorage.setItem('workFlowRunner', JSON.stringify(workFlowRunner.value));
+
   senderValue.value = '';
   await sessionStore.createSessionList({
     userId: userStore.userInfo?.userId as number,
@@ -118,6 +216,11 @@ watch(
   },
 );
 
+function loadWorkflowData() {
+  isWorkflowVisible.value = !isWorkflowVisible.value;
+  loadWorkflowList();
+}
+
 // 组件挂载时加载知识库列表
 onMounted(() => {
   loadKnowledgeList();
@@ -140,7 +243,7 @@ onMounted(() => {
       allow-speech
       :select-list="selectTagsArr"
       @submit="handleSend"
-      @showSelectDialog="handleShowSelectDialog"
+      @show-select-dialog="handleShowSelectDialog"
     >
       <template #header>
         <div class="sender-header p-12px pt-6px pb-0px">
@@ -194,10 +297,11 @@ onMounted(() => {
               <div class="knowledge-list-container">
                 <div class="knowledge-list-header">
                   <span>选择知识库</span>
-                  <button class="clear-btn" @click="clearKnowledgeSelection">取消选择</button>
+                  <button class="clear-btn" @click="clearKnowledgeSelection">
+                    取消选择
+                  </button>
                 </div>
                 <div class="knowledge-list">
-
                   <div
                     v-for="item in knowledgeList"
                     :key="item.id"
@@ -215,7 +319,6 @@ onMounted(() => {
                       </el-icon>
                     </div>
                   </div>
-
                 </div>
               </div>
             </template>
@@ -251,6 +354,48 @@ onMounted(() => {
               </el-icon>
               <span class="feature-text">联网</span>
             </div>
+
+            <el-popover
+              ref="knowledgePopoverRef"
+              placement="top-start"
+              :width="280"
+              trigger="click"
+              popper-class="knowledge-popover"
+            >
+              <template #default>
+                <div class="knowledge-list-container">
+                  <div class="knowledge-list" @scroll="handleScroll">
+                    <div
+                      v-for="item in workflowList"
+                      :key="item.id"
+                      class="knowledge-item"
+                      :class="{ 'is-selected': selectedWorkflowName === item.title }"
+                      @click="chooseWorkflowItem(item)"
+                    >
+                      <div class="item-name">
+                        {{ item.title }}
+                      </div>
+                    </div>
+                    <!-- 加载提示 -->
+                    <div v-if="isWorkflowLoading" class="loading-tip">
+                      加载中...
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template #reference>
+                <div
+                  class="feature-btn"
+                  :class="{ active: isWorkflowVisible }"
+                  @click="loadWorkflowData"
+                >
+                  <el-icon class="feature-icon">
+                    <SetUp />
+                  </el-icon>
+                  <span class="feature-text">{{ selectedWorkflowName }}</span>
+                </div>
+              </template>
+            </el-popover>
           </div>
         </div>
       </template>
@@ -294,13 +439,18 @@ onMounted(() => {
     text-overflow: ellipsis;
 
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.2) 50%, transparent 100%);
+      background: linear-gradient(
+        135deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.2) 50%,
+        transparent 100%
+      );
       opacity: 0;
       transition: opacity 0.3s ease;
       pointer-events: none;
@@ -455,7 +605,7 @@ onMounted(() => {
 
     // 项目前的颜色指示器
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       left: 0;
       top: 0;
@@ -531,6 +681,13 @@ onMounted(() => {
   }
 }
 
+.loading-tip {
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  color: #909399;
+}
+
 // 知识库列表底部
 .knowledge-list-footer {
   padding: 8px 12px;
@@ -574,7 +731,7 @@ onMounted(() => {
     display: none;
   }
 
-  [role='tooltip'] {
+  [role="tooltip"] {
     padding: 0;
   }
 }
