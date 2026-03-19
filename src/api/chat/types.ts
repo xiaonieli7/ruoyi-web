@@ -1,54 +1,101 @@
 /**
+ * 工作流请求体
+ */
+export interface WorkFlowRunner {
+  workflowId?: string;
+  inputs?: {
+    name: string;
+    type: string;
+    content: {
+      value: string;
+      type: string;
+    };
+  }[];
+}
+
+/**
+ * 人机交互信息体
+ */
+export interface ReSumeRunner {
+  runtimeUuid?: string;
+  feedbackContent?: string;
+}
+
+/**
+ * SSE 事件类型
+ */
+export type SseEventType = 'content' | 'reasoning' | 'done' | 'error' | 'message';
+
+/**
+ * SSE 事件数据
+ */
+export interface SseEventData {
+  /**
+   * 事件类型
+   */
+  event: SseEventType;
+  /**
+   * 消息内容
+   */
+  content?: string;
+  /**
+   * 推理内容（深度思考模式）
+   */
+  reasoningContent?: string;
+  /**
+   * 错误信息
+   */
+  error?: string;
+  /**
+   * 是否完成
+   */
+  done?: boolean;
+}
+
+/**
  * ChatRequest，描述：对话请求对象
  */
 export interface SendDTO {
   /**
-   * 应用ID
+   * 传入的模型（必填）
    */
-  appId?: string;
+  model: string;
   /**
-   * 上下文的条数
+   * 对话消息（必填）
    */
-  contentNumber?: number;
+  content: string;
   /**
-   * 是否开启mcp
+   * 工作流请求体
    */
-  isMcp?: boolean;
+  workFlowRunner?: WorkFlowRunner;
   /**
-   * 知识库id
+   * 人机交互信息体
    */
-  knowledgeId?: string;
-  messages: Message[];
-  // model: ModelType;
-  model?: string;
+  reSumeRunner?: ReSumeRunner;
   /**
-   * 提示词
+   * 是否为人机交互用户继续输入
    */
-  prompt?: string;
+  isResume?: boolean;
   /**
-   * 是否开启联网搜索(0关闭 1开启)
+   * 是否启用工作流
    */
-  search?: boolean;
+  enableWorkFlow?: boolean;
   /**
    * 会话id
    */
   sessionId?: string;
   /**
-   * 是否开启流式对话
+   * 知识库id
    */
-  stream?: boolean;
+  knowledgeId?: string;
   /**
-   * 系统提示词
+   * 应用ID
    */
-  sysPrompt?: string;
+  appId?: string;
   /**
-   * 用户id
+   * 对话id(每个聊天窗口都不一样)
    */
-  userId?: number;
-  /**
-   * 是否携带上下文
-   */
-  usingContext?: boolean;
+  uuid?: number;
   /**
    * 是否启用深度思考
    */
@@ -218,7 +265,7 @@ export interface ChatMessageVo {
   /**
    * 会话id
    */
-  sessionId?: number;
+  sessionId?: string;
   /**
    * 累计 Tokens
    */
